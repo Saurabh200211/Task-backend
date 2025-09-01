@@ -1,152 +1,159 @@
 const router = require("express").Router();
 const Task = require("../models/task");
 const User = require("../models/user");
-const {authenticateToken} = require("./auth");
+const { authenticateToken } = require("./auth");
 
 // create-task
 router.post("/create-task", authenticateToken, async (req, res) => {
-    try {
-        const { title, desc } = req.body;
-        const { id } = req.headers;
+  try {
+    const { title, desc } = req.body;
+    const userId = req.user.id; // ✅ from token
 
-        // ✅ Step 1: Check if a task with the same title already exists
-        const existingTask = await Task.findOne({ title });
-        if (existingTask) {
-            return res.status(400).json({ message: "Task title already exists" });
-        }
-
-        // ✅ Step 2: Save the new task
-        const newTask = new Task({ title, desc });
-        const saveTask = await newTask.save();
-
-        // ✅ Step 3: Add the task to the user
-        await User.findByIdAndUpdate(id, { $push: { tasks: saveTask._id } });
-
-        res.status(200).json({ message: "Task created successfully" });
-    } catch (error) {
-        console.log(error);
-        res.status(400).json({ message: "Internal Server Error" });
+    // check duplicate task for same user
+    const existingTask = await Task.findOne({ title, user: userId });
+    if (existingTask) {
+      return res.status(400).json({ message: "Task title already exists" });
     }
+
+    // create new task
+    const newTask = new Task({ title, desc });
+    const savedTask = await newTask.save();
+
+    // push to user
+    await User.findByIdAndUpdate(userId, { $push: { tasks: savedTask._id } });
+
+    res.status(200).json({ message: "Task created successfully", task: savedTask });
+  } catch (error) {
+    console.error("Create Task Error:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
 });
 
 // get-all-tasks
 router.get("/get-all-tasks", authenticateToken, async (req, res) => {
-    try {
-        const {id} = req.headers;
-        const userData = await User.findById(id).populate({ 
-        path:"tasks",
-        options: { sort: { createdAt: -1}},
+  try {
+    const userId = req.user.id; // ✅ from token
+    const userData = await User.findById(userId).populate({
+      path: "tasks",
+      options: { sort: { createdAt: -1 } },
     });
-      res.status(200).json({ data: userData });
-    } catch (error) {
-        console.log(error);
-        res.status(400).json({ message: "Internal Server Error" });
-    }
+
+    res.status(200).json({ tasks: userData.tasks }); // ✅ send only tasks
+  } catch (error) {
+    console.error("Get All Tasks Error:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
 });
 
-// delete-Task
+// delete-task
 router.delete("/delete-task/:id", authenticateToken, async (req, res) => {
-    try {
-        const {id} = req.params;
-        const userId = req.headers.id;
-        await Task.findByIdAndDelete(id);
-        await User.findByIdAndUpdate(userId, { $pull: { tasks: id }});
-      res.status(200).json({ message: "Task deleted successfully"});
-    } catch (error) {
-        console.log(error);
-        res.status(400).json({ message: "Internal Server Error" });
-    }
+  try {
+    const taskId = req.params.id;
+    const userId = req.user.id;
+
+    await Task.findByIdAndDelete(taskId);
+    await User.findByIdAndUpdate(userId, { $pull: { tasks: taskId } });
+
+    res.status(200).json({ message: "Task deleted successfully" });
+  } catch (error) {
+    console.error("Delete Task Error:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
 });
 
-// update-Task
+// update-task
 router.put("/update-task/:id", authenticateToken, async (req, res) => {
-    try {
-        const {id} = req.params;
-        const {title, desc} = req.body;
-        await Task.findByIdAndUpdate(id, {title: title, desc: desc });
-      res.status(200).json({ message: "Task updated successfully"});
-    } catch (error) {
-        console.log(error);
-        res.status(400).json({ message: "Internal Server Error" });
-    }
+  try {
+    const { title, desc } = req.body;
+    const taskId = req.params.id;
+
+    await Task.findByIdAndUpdate(taskId, { title, desc });
+    res.status(200).json({ message: "Task updated successfully" });
+  } catch (error) {
+    console.error("Update Task Error:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
 });
 
-// update-Important Task
+// toggle important
 router.put("/update-imp-task/:id", authenticateToken, async (req, res) => {
-    try {
-        const {id} = req.params;
-        const TaskData = await Task.findById(id);
-        const ImpTask = TaskData.important;
-        await Task.findByIdAndUpdate(id, { important: !ImpTask });
-      res.status(200).json({ message: "Task updated successfully"});
-    } catch (error) {
-        console.log(error);
-        res.status(400).json({ message: "Internal Server Error" });
-    }
+  try {
+    const taskId = req.params.id;
+    const task = await Task.findById(taskId);
+    task.important = !task.important;
+    await task.save();
+
+    res.status(200).json({ message: "Task importance updated" });
+  } catch (error) {
+    console.error("Update Important Error:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
 });
 
-// update-Complete Task
+// toggle complete
 router.put("/update-complete-task/:id", authenticateToken, async (req, res) => {
-    try {
-        const {id} = req.params;
-        const TaskData = await Task.findById(id);
-        const CompleteTask = TaskData.complete;
-        await Task.findByIdAndUpdate(id, { complete: !CompleteTask });
-      res.status(200).json({ message: "Task updated successfully"});
-    } catch (error) {
-        console.log(error);
-        res.status(400).json({ message: "Internal Server Error" });
-    }
+  try {
+    const taskId = req.params.id;
+    const task = await Task.findById(taskId);
+    task.complete = !task.complete;
+    await task.save();
+
+    res.status(200).json({ message: "Task completion updated" });
+  } catch (error) {
+    console.error("Update Complete Error:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
 });
 
 // get important tasks
 router.get("/get-imp-tasks", authenticateToken, async (req, res) => {
-    try {
-        const {id} = req.headers;
-        const Data = await User.findById(id).populate({
-        path: "tasks",
-        match: { important: true },
-        options: { sort:  { createdAt: -1} },
-        });
-        const ImpTaskData = Data.tasks;
-      res.status(200).json({ data: ImpTaskData });
-    } catch (error) {
-        console.log(error);
-        res.status(400).json({ message: "Internal Server Error" });
-    }
+  try {
+    const userId = req.user.id;
+    const data = await User.findById(userId).populate({
+      path: "tasks",
+      match: { important: true },
+      options: { sort: { createdAt: -1 } },
+    });
+
+    res.status(200).json({ tasks: data.tasks });
+  } catch (error) {
+    console.error("Get Important Tasks Error:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
 });
 
-// get-complete-tasks
+// get complete tasks
 router.get("/get-complete-tasks", authenticateToken, async (req, res) => {
-    try {
-        const {id} = req.headers;
-        const Data = await User.findById(id).populate({
-        path: "tasks",
-        match: { complete: true },
-        options: { sort:  { createdAt: -1} },
-        });
-        const CompTaskData = Data.tasks;
-      res.status(200).json({ data: CompTaskData });
-    } catch (error) {
-        console.log(error);
-        res.status(400).json({ message: "Internal Server Error" });
-    }
+  try {
+    const userId = req.user.id;
+    const data = await User.findById(userId).populate({
+      path: "tasks",
+      match: { complete: true },
+      options: { sort: { createdAt: -1 } },
+    });
+
+    res.status(200).json({ tasks: data.tasks });
+  } catch (error) {
+    console.error("Get Complete Tasks Error:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
 });
 
-// get-incomplete-tasks
+// get incomplete tasks
 router.get("/get-incomplete-tasks", authenticateToken, async (req, res) => {
-    try {
-        const {id} = req.headers;
-        const Data = await User.findById(id).populate({
-        path: "tasks",
-        match: { complete: false },
-        options: { sort:  { createdAt: -1} },
-        });
-        const CompTaskData = Data.tasks;
-      res.status(200).json({ data: CompTaskData });
-    } catch (error) {
-        console.log(error);
-        res.status(400).json({ message: "Internal Server Error" });
-    }
+  try {
+    const userId = req.user.id;
+    const data = await User.findById(userId).populate({
+      path: "tasks",
+      match: { complete: false },
+      options: { sort: { createdAt: -1 } },
+    });
+
+    res.status(200).json({ tasks: data.tasks });
+  } catch (error) {
+    console.error("Get Incomplete Tasks Error:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
 });
+
 module.exports = router;
