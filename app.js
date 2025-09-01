@@ -9,7 +9,7 @@ const TaskAPI = require("./routes/task");
 
 // CORS setup
 app.use(cors({
-  origin: ["https://your-frontend.vercel.app"], // change to your frontend domain
+  origin: ["https://task-frontend-henna.vercel.app/signup"], // change to your frontend domain
   credentials: true
 }));
 
