@@ -8,7 +8,6 @@ router.post("/sign-up", async (req, res) => {
   try {
     const { username, email, password, country } = req.body;
 
-    // Check all fields
     if (!username || !email || !password || !country) {
       return res.status(400).json({ message: "All fields are required" });
     }
@@ -35,23 +34,24 @@ router.post("/sign-up", async (req, res) => {
   }
 });
 
-// LOGIN API
-router.post("/log-in", async (req, res) => {
+// LOGIN API (corrected to /sign-in)
+router.post("/sign-in", async (req, res) => {
   try {
     const { username, password } = req.body;
 
     const existingUser = await User.findOne({ username });
     if (!existingUser) return res.status(400).json({ message: "Invalid Credentials" });
 
-    bcrypt.compare(password, existingUser.password, (err, result) => {
-      if (err) return res.status(500).json({ message: "Error comparing passwords" });
+    const isMatch = await bcrypt.compare(password, existingUser.password);
+    if (!isMatch) return res.status(400).json({ message: "Invalid Credentials" });
 
-      if (result) {
-        const token = jwt.sign({ id: existingUser._id, username }, "tcmTM", { expiresIn: "2d" });
-        return res.status(200).json({ id: existingUser._id, token });
-      } else {
-        return res.status(400).json({ message: "Invalid Credentials" });
-      }
+    const token = jwt.sign({ id: existingUser._id, username }, "tcmTM", { expiresIn: "2d" });
+
+    // Send token AND message
+    return res.status(200).json({ 
+      message: "Login successful",
+      id: existingUser._id, 
+      token 
     });
   } catch (error) {
     console.log(error);
