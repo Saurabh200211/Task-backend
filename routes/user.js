@@ -30,31 +30,45 @@ router.post("/sign-up", async (req, res) => {
 
     return res.status(200).json({ message: "Signup successful" });
   } catch (error) {
-    console.log(error);
+    console.error(error);
     return res.status(500).json({ message: "Internal Server Error" });
   }
 });
 
-// LOGIN API
-router.post("/log-in", async (req, res) => {
+// SIGN IN API
+router.post("/sign-in", async (req, res) => {
   try {
     const { username, password } = req.body;
 
+    if (!username || !password) {
+      return res.status(400).json({ message: "Username and password are required" });
+    }
+
     const existingUser = await User.findOne({ username });
-    if (!existingUser) return res.status(400).json({ message: "Invalid Credentials" });
+    if (!existingUser) {
+      return res.status(400).json({ message: "Invalid credentials" });
+    }
 
-    bcrypt.compare(password, existingUser.password, (err, result) => {
-      if (err) return res.status(500).json({ message: "Error comparing passwords" });
+    const isMatch = await bcrypt.compare(password, existingUser.password);
+    if (!isMatch) {
+      return res.status(400).json({ message: "Invalid credentials" });
+    }
 
-      if (result) {
-        const token = jwt.sign({ id: existingUser._id, username }, "tcmTM", { expiresIn: "2d" });
-        return res.status(200).json({ id: existingUser._id, token });
-      } else {
-        return res.status(400).json({ message: "Invalid Credentials" });
-      }
+    const token = jwt.sign(
+      { id: existingUser._id, username: existingUser.username },
+      process.env.JWT_SECRET || "tcmTM",
+      { expiresIn: "2d" }
+    );
+
+    return res.status(200).json({
+      message: "Login successful",
+      id: existingUser._id,
+      username: existingUser.username,
+      email: existingUser.email,
+      token,
     });
   } catch (error) {
-    console.log(error);
+    console.error(error);
     return res.status(500).json({ message: "Internal Server Error" });
   }
 });
